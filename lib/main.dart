@@ -1,6 +1,5 @@
-import 'dart:convert';
 import 'dart:io';
-
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
@@ -28,44 +27,29 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  bool _isGranted;
-  String _appDocPath, _externalDirPath;
-  File _outFile, _inputFie;
+  bool _isGranted = true;
+  String filename = "demo.mp4";
   String _videoURL =
       "https://assets.mixkit.co/videos/preview/mixkit-clouds-and-blue-sky-2408-large.mp4";
   String _imageURL =
       "https://images.pexels.com/photos/5849319/pexels-photo-5849319.jpeg?crop=entropy&cs=srgb&dl=pexels-polina-tankilevitch-5849319.mp4&fit=crop&fm=jpg&h=1920&w=1280";
+  String _pdfURL = "https://www.irjet.net/archives/V5/i3/IRJET-V5I3124.pdf";
+  String _zipURL = "https://www.1001freefonts.com/d/4063/admiration-pains.zip";
 
-  @override
-  void initState() {
-    super.initState();
-    requestStoragePermission();
-    getAppDir();
-    getExternalVisibleDir();
+  Future<Directory> get getAppDir async {
+    final appDocDir = await getExternalStorageDirectory();
+    return appDocDir;
   }
 
-  getAppDir() async {
-    Directory appDocDir = await getExternalStorageDirectory();
-    setState(() {
-      _appDocPath = appDocDir.path;
-    });
-  }
-
-  getExternalVisibleDir() async {
+  Future<Directory> get getExternalVisibleDir async {
     if (await Directory('/storage/emulated/0/MyEncFolder').exists()) {
-      Directory externalDir =
-          await Directory('/storage/emulated/0/MyEncFolder');
-      setState(() {
-        _externalDirPath = externalDir.path;
-      });
+      final externalDir = Directory('/storage/emulated/0/MyEncFolder');
+      return externalDir;
     } else {
       await Directory('/storage/emulated/0/MyEncFolder')
           .create(recursive: true);
-      Directory externalDir =
-          await Directory('/storage/emulated/0/MyEncFolder');
-      setState(() {
-        _externalDirPath = externalDir.path;
-      });
+      final externalDir = Directory('/storage/emulated/0/MyEncFolder');
+      return externalDir;
     }
   }
 
@@ -79,13 +63,12 @@ class _HomePageState extends State<HomePage> {
       } else {
         _isGranted = false;
       }
-    } else {
-      _isGranted = true;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    requestStoragePermission();
     return Scaffold(
       body: Center(
         child: Column(
@@ -95,7 +78,9 @@ class _HomePageState extends State<HomePage> {
               child: Text("Download Video"),
               onPressed: () async {
                 if (_isGranted) {
-                  _mainOperaton(_videoURL, _outFile);
+                  Directory d = await getExternalVisibleDir;
+                  // Directory hiddenDir = await getAppDir;
+                  _downloadAndCreate(_videoURL, d, filename);
                 } else {
                   print("No permission granted.");
                   requestStoragePermission();
@@ -106,7 +91,9 @@ class _HomePageState extends State<HomePage> {
               child: Text("Decrypt Video"),
               onPressed: () async {
                 if (_isGranted) {
-                  _decryptData(_inputFie, _outFile);
+                  Directory d = await getExternalVisibleDir;
+                  // Directory hiddenDir = await getAppDir;
+                  _getNormalFile(d, filename);
                 } else {
                   print("No permission granted.");
                   requestStoragePermission();
@@ -120,67 +107,62 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-_mainOperaton(String url, File _outFile) async {
+_downloadAndCreate(String url, Directory d, filename) async {
   if (await canLaunch(url)) {
     print("Data downloading....");
     var resp = await http.get(url);
-    // String filename = _getFilenameFromHeaders(resp.headers);
 
     var encResult = _encryptData(resp.bodyBytes);
-
-    print("Writting file...");
-    _outFile = File("/storage/emulated/0/MyEncFolder/demo.mp4.aes");
-    File a = await _outFile.writeAsBytes(encResult);
-    print("file generated here: ${a.absolute}");
+    String p = await _writeData(encResult, d.path + '/$filename.aes');
+    print("file encrypted successfully: $p");
   } else {
     print("Can't launch URL.");
   }
 }
 
-_getFilenameFromHeaders(Map<String, String> h) {
-  if (h.containsKey('content-disposition')) {
-    return h['content-disposition'].split("=")[1].replaceAll('"', '');
-  } else {
-    print("Filename not available.");
-  }
+_getNormalFile(Directory d, filename) async {
+  Uint8List encData = await _readData(d.path + '/$filename.aes');
+  var plainData = await _decryptData(encData);
+  String p = await _writeData(plainData, d.path + '/$filename');
+  print("file decrypted successfully: $p");
 }
 
 _encryptData(plainString) {
   print("Encrypting File...");
-  final encrypter = enc.Encrypter(enc.AES(MyEncrypt.myKey));
-  final encrypted = encrypter.encryptBytes(plainString, iv: MyEncrypt.myIv);
+  final encrypted =
+      MyEncrypt.myEncrypter.encryptBytes(plainString, iv: MyEncrypt.myIv);
   return encrypted.bytes;
 }
 
-_decryptData(_inputFile, _outFile) async {
-  final encrypter = enc.Encrypter(enc.AES(MyEncrypt.myKey));
+_decryptData(encData) {
   print("File decryption in progress...");
-  if (await Directory('/storage/emulated/0/MyEncFolder').exists()) {
-    _inputFile = File(
-        Directory('/storage/emulated/0/MyEncFolder').path + "/demo.mp4.aes");
-    var readData = await _inputFile.readAsBytes();
-    enc.Encrypted en = new enc.Encrypted(readData);
-    final decrypted = encrypter.decryptBytes(en, iv: MyEncrypt.myIv);
-    _outFile =
-        File(Directory('/storage/emulated/0/MyEncFolder').path + "/demo.mp4");
-    await _outFile.writeAsBytes(decrypted);
-    print("file generated here: ${_outFile.path}");
-  }
+  enc.Encrypted en = new enc.Encrypted(encData);
+  return MyEncrypt.myEncrypter.decryptBytes(en, iv: MyEncrypt.myIv);
 }
 
-_readData(fileNameWithPath) async {
+Future<Uint8List> _readData(fileNameWithPath) async {
+  print("Reading data...");
   File f = File(fileNameWithPath);
   return await f.readAsBytes();
 }
 
-_writeData(dataToWrite, fileNameWithPath) async {
-  File f =
-      File(fileNameWithPath);
+Future<String> _writeData(dataToWrite, fileNameWithPath) async {
+  print("Writting Data...");
+  File f = File(fileNameWithPath);
   await f.writeAsBytes(dataToWrite);
-  return f.absolute;
+  return f.absolute.toString();
 }
 
 class MyEncrypt {
-  static final myKey = enc.Key.fromUtf8('TechWithVPTechWithVPTechWithVP09');
-  static final myIv = enc.IV.fromUtf8("VivekPanchal0910");
+  static final myKey = enc.Key.fromUtf8('TechWithVPTechWithVPTechWithVP12');
+  static final myIv = enc.IV.fromUtf8("VivekPanchal1122");
+  static final myEncrypter = enc.Encrypter(enc.AES(myKey));
 }
+
+// _getFilenameFromHeaders(Map<String, String> h) {
+//   if (h.containsKey('content-disposition')) {
+//     return h['content-disposition'].split("=")[1].replaceAll('"', '');
+//   } else {
+//     print("Filename not available.");
+//   }
+// }
