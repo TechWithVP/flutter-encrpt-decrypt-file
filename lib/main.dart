@@ -28,11 +28,11 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _isGranted = true;
-  String filename = "demo.mp4";
+  String filename = "demo.zip";
   String _videoURL =
       "https://assets.mixkit.co/videos/preview/mixkit-clouds-and-blue-sky-2408-large.mp4";
   String _imageURL =
-      "https://images.pexels.com/photos/5849319/pexels-photo-5849319.jpeg?crop=entropy&cs=srgb&dl=pexels-polina-tankilevitch-5849319.mp4&fit=crop&fm=jpg&h=1920&w=1280";
+      "https://images.unsplash.com/photo-1607753724987-7277196eac5d?ixlib=rb-1.2.1&q=80&fm=jpg&crop=entropy&cs=tinysrgb&dl=jeremy-bishop-FlR9yw3QEgw-unsplash.jpg&w=1920";
   String _pdfURL = "https://www.irjet.net/archives/V5/i3/IRJET-V5I3124.pdf";
   String _zipURL = "https://www.1001freefonts.com/d/4063/admiration-pains.zip";
 
@@ -61,7 +61,9 @@ class _HomePageState extends State<HomePage> {
           _isGranted = true;
         });
       } else {
-        _isGranted = false;
+        setState(() {
+          _isGranted = false;
+        });
       }
     }
   }
@@ -75,12 +77,19 @@ class _HomePageState extends State<HomePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             RaisedButton(
-              child: Text("Download Video"),
+              child: Text("Download & Encrypt"),
               onPressed: () async {
                 if (_isGranted) {
                   Directory d = await getExternalVisibleDir;
-                  // Directory hiddenDir = await getAppDir;
-                  _downloadAndCreate(_videoURL, d, filename);
+                  /*
+                  Uncomment below line and comment above line to use Application Hidden Directory 
+                  to store files (Recomanded).
+                  
+                  You will not able to view Encrypted files and decrepted files if you use Application Directory
+                  */
+
+                  // Directory d = await getAppDir;
+                  _downloadAndCreate(_zipURL, d, filename);
                 } else {
                   print("No permission granted.");
                   requestStoragePermission();
@@ -88,10 +97,17 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             RaisedButton(
-              child: Text("Decrypt Video"),
+              child: Text("Decrypt File"),
               onPressed: () async {
                 if (_isGranted) {
                   Directory d = await getExternalVisibleDir;
+                  /*
+                  Uncomment below line and comment above line to use Application Hidden Directory 
+                  to store files (Recomanded).
+                  
+                  You will not able to view Encrypted files and decrepted files if you use Application Directory
+                  */
+
                   // Directory hiddenDir = await getAppDir;
                   _getNormalFile(d, filename);
                 } else {
@@ -114,6 +130,7 @@ _downloadAndCreate(String url, Directory d, filename) async {
 
     var encResult = _encryptData(resp.bodyBytes);
     String p = await _writeData(encResult, d.path + '/$filename.aes');
+    // String p = await _writeData(encResult, '/storage/emulated/0/MyEncFolder/demo.mp4.aes');
     print("file encrypted successfully: $p");
   } else {
     print("Can't launch URL.");
@@ -122,8 +139,10 @@ _downloadAndCreate(String url, Directory d, filename) async {
 
 _getNormalFile(Directory d, filename) async {
   Uint8List encData = await _readData(d.path + '/$filename.aes');
+  // Uint8List encData = await _readData('/storage/emulated/0/MyEncFolder/demo.mp4.aes');
   var plainData = await _decryptData(encData);
   String p = await _writeData(plainData, d.path + '/$filename');
+  String p = await _writeData(plainData, '/storage/emulated/0/MyEncFolder/demo.mp4');
   print("file decrypted successfully: $p");
 }
 
@@ -158,11 +177,3 @@ class MyEncrypt {
   static final myIv = enc.IV.fromUtf8("VivekPanchal1122");
   static final myEncrypter = enc.Encrypter(enc.AES(myKey));
 }
-
-// _getFilenameFromHeaders(Map<String, String> h) {
-//   if (h.containsKey('content-disposition')) {
-//     return h['content-disposition'].split("=")[1].replaceAll('"', '');
-//   } else {
-//     print("Filename not available.");
-//   }
-// }
