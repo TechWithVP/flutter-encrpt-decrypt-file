@@ -37,7 +37,7 @@ class _HomePageState extends State<HomePage> {
   String _zipURL = "https://www.1001freefonts.com/d/4063/admiration-pains.zip";
 
   Future<Directory> get getAppDir async {
-    final appDocDir = await getExternalStorageDirectory();
+    final appDocDir = await getApplicationDocumentsDirectory();
     return appDocDir;
   }
 
